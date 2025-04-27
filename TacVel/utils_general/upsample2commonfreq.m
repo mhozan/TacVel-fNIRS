@@ -1,0 +1,1 @@
+function [] = upsample2commonfreq(vector1,freq1,vector2,freq2)

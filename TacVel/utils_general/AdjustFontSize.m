@@ -1,0 +1,35 @@
+function []=AdjustFontSize(varargin)
+
+% Create input parser
+parser = inputParser;
+parser.addOptional('minfontsize', 16);
+parser.addOptional('maxfontsize', 20);
+% Uncomment the lines below to set default values for minfontsize and maxfontsize
+% parser.addParameter('minfontsize', 24);
+% parser.addParameter('maxfontsize', 40);
+% parser.addParameter('minfontsize', 48);
+% parser.addParameter('maxfontsize', 64);
+
+% Parse the inputs
+parser.parse(varargin{:});
+minfntsize = parser.Results.minfontsize;
+maxfntsize = parser.Results.maxfontsize;
+
+
+if mod(nargin,2)==0 %is even? that is, only pairs for input parser is given, no figure handle is given.
+    fh = gcf;
+else
+    fh = varargin{1};
+end
+
+
+fontsizeGroup=findall(fh,'-property','FontSize');
+for ii=1:length(fontsizeGroup)
+    if fontsizeGroup(ii).FontSize<minfntsize
+        fontsizeGroup(ii).FontSize=minfntsize;
+    end
+    if fontsizeGroup(ii).FontSize>maxfntsize
+        fontsizeGroup(ii).FontSize=maxfntsize;
+    end    
+end
+set(findall(fh,'-property','FontName'),'FontName','Arial')

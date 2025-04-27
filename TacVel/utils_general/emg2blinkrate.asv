@@ -1,0 +1,94 @@
+
+function [blinkrate_movavg_smooth, varargout] = emg2blinkrate(EMG_timeseries, Fs, mov_avg_duration)
+%EMG2BLINKRATE Calculate the blink rate from EMG time series data
+%
+% USAGE:
+%   [blinkrate_movavg_smooth, tvec_out] = emg2blinkrate(EMG_timeseries, Fs, mov_avg_duration)
+%
+% INPUTS:
+%   EMG_timeseries      -   A vector containing the EMG time series data.
+%                           Required.
+%
+%   Fs                  -   The sampling frequency of the EMG time series data.
+%                           Optional. Default value is 1000.
+%
+%   mov_avg_duration    -   The duration of the moving average window in seconds.
+%                           Optional. Default value is 5.
+%
+% OUTPUTS:
+%   blinkrate_movavg_smooth     -   The blink rate per second with moving average smoothing applied.
+%
+%   tvec_out varargout{1}       -   The time vector corresponding to the EMG time series data.
+%                               Optional. Only output if requested using nargout.
+%   peak_indices varargout{2}   -   The indices where the eye blink peaks occur using findpeaks function.
+%                               Optional. Only output if requested using nargout.
+% Communication Neuroscience Laboratories,
+% Center for Brain, Biology & Behavior
+% University of Nebraska-Lincoln,
+% Mohsen Hozan hozan@huskers.unl.edu
+% Date 2023
+
+% Check input arguments and set default values
+if nargin < 2 || isempty(Fs)
+    Fs = 1000; % Default sampling frequency
+end
+
+if nargin < 3 || isempty(mov_avg_duration)
+    mov_avg_duration = 20; % Default moving average duration in seconds
+end
+
+% Lowpass Filter EMG signal to focus on low freq oscilations, i.e. eye blinks
+f_lowpass = 5; %Hz
+EMG_filtered = lowpass(EMG_timeseries(:),f_lowpass,Fs,'ImpulseResponse','fir');
+
+% Highpass to get rid of DC drifts.
+fig
+f_hipass = 1; %Hz
+EMG_filtered = (highpass(EMG_filtered,f_hipass,Fs,'ImpulseResponse','fir'));
+
+if abs(prctile(EMG_filtered,99))<abs(prctile(EMG_filtered,1)) %flip the bipolar EMG if peaks are mostly negative. 
+    EMG_filtered = -(EMG_filtered);
+end
+% EMG_filtered = abs(EMG_filtered);
+tvec = (0:length(EMG_timeseries)-1)'/Fs;
+% Find blink instances
+% minpeak_prominence = .5;
+minpeak_prominence = prctile(abs(EMG_filtered(1:1.00*end)),95)
+minpeak_height = .5*minpeak_prominence;
+minpeak_distance = 2*Fs; %ignore blinks less than "minpeak_distance" seconds apart
+maxpeak_width = .3*Fs;  %eyeblinks are very rapid rising and falling;
+[~,blink_indices] = findpeaks(EMG_filtered, ...
+    'MinPeakHeight', minpeak_height, ...
+    'MinPeakProminence',minpeak_prominence, ...
+    'MinPeakDistance',minpeak_distance, ...
+    'MaxPeakWidth',maxpeak_width);
+[~,blink_instances] = findpeaks(EMG_filtered,Fs, ...
+    'MinPeakHeight', minpeak_height, ...
+    'MinPeakProminence',minpeak_prominence, ...
+    'MinPeakDistance',minpeak_distance, ...
+    'MaxPeakWidth',maxpeak_width);
+% blink_instances   = blink_instances + tvec(1);
+
+% Calculate the inter-blink interval in seconds
+ibi = diff(blink_instances); 
+
+% Calculate the blink rate per second
+blink_rate_avg = 1 / mean(ibi);
+
+% Calculate the blink rate using a moving average
+mov_avg_samples = floor(mov_avg_duration * Fs);
+blink_tvec = zeros(size(EMG_timeseries));
+blink_tvec(blink_indices) = 1;
+blink_rate_continuous = movsum(blink_tvec,mov_avg_samples)/mov_avg_duration;
+blinkrate_movavg_smooth = movmean(blink_rate_continuous,mov_avg_samples);
+% figur(mfilename), clf; plot(tvec,EMG_filtered), hold on, scatter((tvec(blink_indices)),ones(size(blink_indices))), plot(tvec,60*blinkrate_movavg_smooth)
+
+% figure((round(100*minpeak_prominence))), clf; plot(tvec,EMG_filtered), hold on, scatter((tvec(blink_indices)),ones(size(blink_indices))), plot(tvec,60*blinkrate_movavg_smooth)
+% Create output time vector if requested
+if nargout >= 2
+    varargout{1} = tvec;
+end
+if nargout==3
+    varargout{2} = blink_indices;
+end
+
