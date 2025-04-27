@@ -1,0 +1,245 @@
+classdef repairoutlierchannels_backup < nirs.modules.AbstractModule
+%% rempairoutlierchannels replaces the fnirs channels that with an agressively filtered version to repair the artifacts   
+%   Input Variables:
+%
+%   Output Variables:
+%
+%   Example(s):
+%   
+% Communication Neuroscience Laboratories,
+% Center for Brain, Biology & Behavior
+% University of Nebraska-Lincoln,
+% Mohsen Hozan hozan@huskers.unl.edu
+% Date 2023
+% 
+%   see also 
+% 
+
+    properties
+        demean  = false;  % remove the DC component first
+        detrend_lin = false; %D = detrend(A,1) removes the 1st-degree polynomial trend. 
+        deviation_threshold = 3; %threshold for a spiky channel which produces an average MAD value 10 times greater than the normal channels
+        replacewith = 0; % deprecated% what to replace with
+        detrendpiecewiseduration = 40; %seconds %window duration for linear piecewise detrending
+        hipassfilter = true; % . all channels are highpass-filtered first. a better alternative to detrending
+        hipasscutoff_Hz = 0.01; %Hz
+        lowpassfilter = true; %for a highly deviated signal, we replace it with a lowpassed version of it
+        lowpasscutoff_Hz = .25; %Hz this is intentionally low while preserving some phyisiological components, to repair the deviated signal to some extnent, as opposed to throwing it out. it is only applied to a few channels per subject
+        fir1ord = 2^12-1;
+    end
+  methods
+        function obj = repairoutlierchannels( prevJob )
+           obj.name = 'Repair Outlier Channels';
+           if nargin > 0
+               obj.prevJob = prevJob;
+           end
+        end
+        
+        function data = runThis( obj, data )
+            
+            % if isempty(obj.demean)
+            %     obj.demean = true;
+            % end
+            % if isempty(obj.rms_deviation_threshold)
+            %     obj.rms_deviation_threshold = rms_deviation_threshold;
+            % end
+
+            for i = 1:numel(data)
+                
+                d = data(i).data;
+                % d_raw = d;
+
+                %% 
+                t = data(i).time;
+                    % disp(obj.deviation_threshold)
+
+                % figur(), plot(t,d)
+
+                if obj.demean
+                    meanvalues = mean(d);
+                    d = d - meanvalues;
+                    % d = d;
+
+                end
+                if obj.detrend_lin
+                    d = detrend_lin_pw(d,round(obj.detrendpiecewiseduration*data(i).Fs));
+                end
+
+                if obj.hipassfilter
+
+                    % figure, plot(t,d)
+                    % while length(d)<obj.fir1ord*8 %when the data is resampled to small values, high fir1 order might cause an error.
+                    %     obj.fir1ord = obj.fir1ord/2;
+                    % end
+                    bhi = fir1(obj.fir1ord,obj.hipasscutoff_Hz*2/data(i).Fs,'high');
+
+                    d = filtfilt(bhi,1,d);
+                    % hold on
+                    % plot(t,d)
+                end
+
+
+                if obj.lowpassfilter
+
+                    % figure, plot(t,d)
+                    % while length(d)<obj.fir1ord*8 %when the data is resampled to small values, high fir1 order might cause an error.
+                        % obj.fir1ord = obj.fir1ord/2;
+                    % end
+                    blo = fir1(obj.fir1ord,obj.lowpasscutoff_Hz*2/data(i).Fs,'low');
+
+                    d = filtfilt(blo,1,d);
+                    % hold on
+                    % plot(t,d)
+                end
+
+                shortchannelindices = data(i).probe.link.ShortSeperation;
+                shortchannels = d(:,shortchannelindices);
+                % b_shortchannels = fir1(obj.fir1ord,[0.02 0.5]*2/data(i).Fs);
+                % shortchannels = filtfilt(b_shortchannels,1,shortchannels);
+                % d(:,shortchannelindices) = shortchannels;
+
+                % ii=1:8; figure(123); clf;  plot(t,shortchannels(:,ii)); ylim([-0.03 0.03]);
+                % drawnow; pause(1); 
+
+                %% optical density
+                % m = mean( d, 1 ,"omitnan");
+                % d_log =-log(d./(ones(size(d,1),1)*m));
+                % d = d_log;
+                % rmsvalues = rms(d);
+                %%
+                windowSize = round(40*data(i).Fs);  % Define the window size
+                movingStd = movstd(d, windowSize);    
+
+
+                % for jj=1:10:120; figure(jj), plot(t,d(:,jj)), hold on, plot(t,movingStd(:,jj)); end;                
+                % madvalues = mad(d); %median absolute deviation
+                madvalues = mad(movingStd); %median absolute deviation
+
+                % zz=mad(d);
+                madmean = mean(madvalues);
+
+
+
+
+                % rmsmedian = prctile(rmsvalues,50);
+                % figure(124), clf, plot(madvalues), hold on, plot(zz)
+                % hold on
+                % plot(0:123,obj.deviation_threshold*madmedian*ones(1,124),'--r')
+                % rmsavg = mean(rmsvalues)
+                % rmsmedian = median(rmsvalues);
+                madoutliers = madvalues>obj.deviation_threshold*madmean;
+                if any(madoutliers)
+                    % disp(obj.deviation_threshold)
+                    lll = length(find(madoutliers));
+                    formatSpec = repmat('%2.0f;', 1, lll);
+
+                    ttl = sprintf(['i =%2.0f; %s; dev_from_madmean = %1.0f; %2.0f outlier channels [',formatSpec,'].\n'],i,[data(i).demographics('ID'),'_',data(i).demographics('Session')],obj.deviation_threshold,lll,find(madoutliers));
+                    disp(ttl)
+                    % zz=d(:,madoutliers);
+                    % winlen = ceil(10*data(i).Fs);
+                    % noverlap = winlen/2;
+                    % [spctrgm,fvec,tvec] = spectrogram(zz(:,1),winlen,noverlap,[0:0.01:data(i).Fs],data(i).Fs) ;
+                    % figure(4234), clf, spectrogram(zz(:,1),90,45)
+                    % figure(4234), clf, imagesc(tvec,fvec,abs(spctrgm).^2)
+                    blo = fir1(obj.fir1ord,[obj.hipasscutoff_Hz obj.lowpasscutoff_Hz]*2/data(i).Fs);
+                    % figure, plot(t,d)
+                    detrend_duration = obj.detrendpiecewiseduration; %seconds;
+                   
+
+                    dd = detrend_lin_pw(d(:,madoutliers),round(detrend_duration*data(i).Fs));
+                    dd = filtfilt(blo,1,dd);
+
+                    outlierANDshort = intersect(find(shortchannelindices.'),find(madoutliers));
+
+                    if ~isempty(outlierANDshort) %replace the outlier channel with all zeroes if it is also a short channel. 
+                        disp('outlierANDshort')
+                        disp(outlierANDshort)
+                        
+
+                        outliershortindices = ismember(find(madoutliers),outlierANDshort);
+                        dd(:,outliershortindices) = 0*dd(:,outliershortindices);
+                    end
+
+
+                    dovisualize=true;
+                    if dovisualize
+                        axpos = subplotpos(5,1,'ygap',.00);
+                        figure(900+i), clf,
+                        ax(4) = axes; plot(ax(4),t,d(:,~madoutliers)), %title('Outlier Channels Hipass-filtered only'),
+                        ax(4).Position = axpos(2,:); ax(4).XTickLabel=[]; grid minor; ax(4).Position(4)=.9*ax(4).Position(4);
+                        txtyloc= 4*max(madvalues);%max(d:);
+                        txtxloc =100;
+                        text(ax(4),txtxloc,txtyloc,'Non-Outlier Channels de-meaned','Color','k')
+                        ax(1) = axes; plot(ax(1),t,d(:,madoutliers)), %title('Outlier Channels Hipass-filtered only'),
+                        ax(1).Position = axpos(3,:); ax(1).XTickLabel=[]; grid minor
+                        txtyloc= 4*max(madvalues);%max(d:);
+                        txtxloc =100;
+                        text(ax(1),txtxloc,txtyloc,'Outlier Channels de-meaned','Color','r')
+                        ax(2) = axes; plot(ax(2),t,dd), %title('Outlier Channels Repaired by additional pw-detrending Lowpass filtering'),
+                        ax(2).Position = axpos(4,:); ax(2).XTickLabel=[]; grid minor
+                        text(ax(2),txtxloc,txtyloc,'Outlier Channels Repaired by HPF and additional pw-detrending Lowpass filtering','Color','g')
+                        ax0 = axes;
+                        ax0.Position = axpos(1,:);
+                        scatter(ax0,1:length(madvalues),madvalues), hold on, grid minor
+                        plot(ax0,0:123,obj.deviation_threshold*madmean*ones(1,124),'--r')
+                        sgtitle(ttl,'Interpreter','none');
+                        ax(3) = axes;
+                        ax(3).Position = axpos(5,:);
+                        if ~isempty(shortchannels)
+                            plot(ax(3),t,shortchannels)%title('All short Channels Hipass-filtered only')
+                            grid minor
+                            text(ax(3),txtxloc,txtyloc,'All short Channels Hipass-filtered only','Color','b')
+
+                        end
+
+
+                        linkaxes(ax)
+                        drawnow
+                    end
+
+
+                    % d(:,madoutliers)=obj.replacewith;
+                    d(:,madoutliers)=dd;
+                    
+
+                   
+                    % edit nirs.realtime.modules.MotionCorrect
+                    % edit nirs.realtime.modules.BandPass
+                    % lowpasscutoff=.5;
+                    % highpasscutoff=0.016;
+                    %%
+                    % lowpasscutoff=data(i).Fs;
+                    % highpasscutoff=0.01;
+                    % model=2048;
+                    % % fb=fir1(model,[highpasscutoff lowpasscutoff]*2/data(i).Fs);
+                    % fb=fir1(model,highpasscutoff*2/data(i).Fs,'high');
+                    % 
+                    % % fff  = sum(fb'*zz(:,1)').';
+                    % fff = filtfilt(fb,1,zz);
+                    % figure, plot(t,zz); hold on, plot(t,fff)
+                    % 
+                    % %%
+                    % zz2 = nirs.realtime.modules.BandPass(zz);
+                    if true
+                    figur(mfilename), clf, 
+                    ax(1)= subplot(2,1,1);
+                    plot(t,(data(i).data))
+                    title([data(i).demographics('ID'),'_',data(i).demographics('Session'),'_before'],'Interpreter','none')
+                    ax(2)= subplot(2,1,2);
+                    plot(t,d)
+                    title([data(i).demographics('ID'),'_',data(i).demographics('Session'),'_after'],'Interpreter','none')
+                    linkaxes('x')
+                    end
+
+                end
+
+
+     
+                data(i).data = d;
+                data(i).time = t;
+                
+            end
+        end
+  end 
+    
+end
