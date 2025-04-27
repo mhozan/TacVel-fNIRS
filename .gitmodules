@@ -1,3 +1,6 @@
 [submodule "TacVel/adinstrumetns_sdk_matlab"]
 	path = TacVel/adinstrumetns_sdk_matlab
 	url = https://github.com/JimHokanson/adinstruments_sdk_matlab.git
+[submodule "TacVel/nirs-toolbox-master"]
+	path = TacVel/nirs-toolbox-master
+	url = https://github.com/huppertt/nirs-toolbox.git
