@@ -4,3 +4,6 @@
 [submodule "TacVel/nirs-toolbox-master"]
 	path = TacVel/nirs-toolbox-master
 	url = https://github.com/huppertt/nirs-toolbox.git
+[submodule "TacVel/nirs-toolbox"]
+	path = TacVel/nirs-toolbox
+	url = https://github.com/huppertt/nirs-toolbox.git
