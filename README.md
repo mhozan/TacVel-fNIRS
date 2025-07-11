@@ -10,7 +10,7 @@ Somatosensory Hemodynamic response to Tactile Stimulation at different Velocitie
 ![MATLAB](https://img.shields.io/badge/MATLAB-R2023b-blue?logo=mathworks)
 
 
-# summary of the piplines
+## summary of the piplines
 xxxxxxxxxxxxxxxx
 
 ![Alt Text](./figures/TacVel_pipeline.png)
@@ -33,8 +33,8 @@ xxxxxx
 
 
 ## Setup the code
- Clone the repository and change your working directory to the TacVel-fNIRs path. 
- ```
+Clone the repository and change your working directory to the TacVel-fNIRs path. 
+```
 cd <directory you want to place the repo>
 git clone <https://github.com/mhozan/TacVel-fNIRS.git>
 cd TacVel-fNIRS
@@ -42,6 +42,6 @@ cd TacVel-fNIRS
 
 The cloned repo ..... Now move the ```+cnl``` folder as follows.
 ```
-mv source_folder target_folder/
+mv ./TacVel/+cnl ./TacVel/nirs-toolbox/+nirs/
 ```
 
