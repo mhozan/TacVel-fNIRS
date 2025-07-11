@@ -14,9 +14,9 @@ if ~isempty(hAllAxes)
         Xstart=ceil(xlimz(1));
         Xstep = 1;
         Xend = ceil(xlimz(2));
-        if range(xlimz)>10*60
-            Xstep = 60;
-            Xstart = Xstart-mod(Xstart,60);
+        if range(xlimz)>3*60
+            Xstep = 40;
+            Xstart = Xstart-mod(Xstart,Xstep);
         end            
         xtickz = Xstart:Xstep:Xend;
 
